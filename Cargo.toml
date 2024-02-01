@@ -13,3 +13,8 @@ rustyline = "13"
 [[bin]]
 name = "gdbmtool-rs"
 path = "src/gdbmtool.rs"
+
+[[bin]]
+name = "gdbmdump-rs"
+path = "src/dump.rs"
+
