@@ -266,8 +266,8 @@ dependencies = [
 
 [[package]]
 name = "rs-gdbm"
-version = "0.5.0"
-source = "git+https://github.com/jgarzik/gdbm-rs.git#3cb251e9ad1f6b63593d8ad486dd5f7e2d52dc3e"
+version = "0.5.1"
+source = "git+https://github.com/jgarzik/gdbm-rs.git#543290388698f736747ddc71da7536627ac96395"
 dependencies = [
  "base64",
  "byteorder",
