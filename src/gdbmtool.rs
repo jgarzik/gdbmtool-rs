@@ -1,11 +1,13 @@
 extern crate clap;
 extern crate rs_gdbm;
 extern crate rustyline;
+extern crate shellwords;
 
 use clap::Parser;
 use rs_gdbm::Gdbm;
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
+use std::str;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -20,10 +22,11 @@ struct Args {
 
 fn cmd_help() {
     let helpstr = r#"Available commands:
-exit		Exit program.
+exit		Exit program
+get KEY		Retrieve and display value for specified KEY
 header		Display database global header
-help		This message.
-version		Display program name and version."#;
+help		This message
+version		Display program name and version"#;
 
     println!("{}", helpstr);
 }
@@ -54,13 +57,37 @@ fn cmd_header(db: &Gdbm) -> bool {
     true
 }
 
+fn cmd_get(db: &mut Gdbm, args: &[String]) {
+    if args.len() < 1 {
+        return;
+    }
+
+    let res = db.get(args[0].as_bytes());
+    match res {
+        Ok(opt) => match opt {
+            None => {
+                println!("ERROR: Key not found");
+            }
+            Some(val) => match str::from_utf8(&val) {
+                Ok(s) => println!("{}", s),
+                Err(_e) => println!("{:?}", val),
+            },
+        },
+        Err(_e) => {
+            println!("ERROR: Database GET low-level error");
+        }
+    }
+}
+
 fn handle_line(db: &mut Gdbm, line: &String) -> bool {
-    let mut tsplit = line.split_whitespace();
+    let words = shellwords::split(&line).expect("Invalid command syntax");
 
-    let cmd_name = tsplit.next().expect("No command provided");
+    let cmd_name = &words[0];
+    let cmd_args = &words[1..];
 
-    match cmd_name {
+    match cmd_name.as_ref() {
         "exit" => return false,
+        "get" => cmd_get(db, cmd_args),
         "header" => return cmd_header(&db),
         "help" => cmd_help(),
         "version" => cmd_version(),
