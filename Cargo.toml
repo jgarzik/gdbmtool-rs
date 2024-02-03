@@ -9,6 +9,7 @@ edition = "2021"
 clap = { version = "4", features = ["derive"] }
 rs-gdbm = { version = "0", git = "https://github.com/jgarzik/gdbm-rs.git" }
 rustyline = "13"
+shellwords = "1.1"
 
 [[bin]]
 name = "gdbmtool-rs"
