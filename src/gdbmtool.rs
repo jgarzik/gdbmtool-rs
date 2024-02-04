@@ -27,7 +27,13 @@ struct CmdInfo {
     min_args: usize,
 }
 
-const CMDINFO: [CmdInfo; 5] = [
+const CMDINFO: [CmdInfo; 6] = [
+    CmdInfo {
+        name: "dir",
+        description: "Display hash directory",
+        arginfo: "",
+        min_args: 0,
+    },
     CmdInfo {
         name: "exit",
         description: "Exit program",
@@ -85,10 +91,15 @@ fn cmd_version() {
     println!("{} {}", PKG_NAME, VERSION);
 }
 
-fn cmd_header(db: &Gdbm) -> bool {
+fn cmd_dir(db: &Gdbm) {
+    for n in 0..db.dir.dir.len() {
+        println!("{} {}", n, db.dir.dir[n]);
+    }
+}
+
+fn cmd_header(db: &Gdbm) {
     let (dir_sz, dir_bits) = rs_gdbm::dir::build_dir_size(db.header.block_sz);
 
-    println!("{}", "GDBM file header:\n");
     println!("magic {:#x}", db.header.magic);
     println!("dir-offset {}", db.header.dir_ofs);
     println!("dir-size {}", dir_sz);
@@ -100,8 +111,6 @@ fn cmd_header(db: &Gdbm) -> bool {
     println!("avail-size {}", db.header.avail.sz);
     println!("avail-count {}", db.header.avail.count);
     println!("avail-next-block {}", db.header.avail.next_block);
-
-    true
 }
 
 fn cmd_get(db: &mut Gdbm, args: &[String]) {
@@ -147,9 +156,10 @@ fn handle_line(db: &mut Gdbm, line: &String) -> bool {
     }
 
     match cmd_name.as_ref() {
+        "dir" => cmd_dir(db),
         "exit" => return false,
         "get" => cmd_get(db, cmd_args),
-        "header" => return cmd_header(&db),
+        "header" => cmd_header(db),
         "help" => cmd_help(),
         "version" => cmd_version(),
         _ => println!("BUG: CMDINFO out of sync in source"),

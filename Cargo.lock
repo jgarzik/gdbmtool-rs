@@ -312,7 +312,7 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 [[package]]
 name = "rs-gdbm"
 version = "0.5.1"
-source = "git+https://github.com/jgarzik/gdbm-rs.git#543290388698f736747ddc71da7536627ac96395"
+source = "git+https://github.com/jgarzik/gdbm-rs.git#3ea247f162bfd00c5ea8e0901e7147fb79714110"
 dependencies = [
  "base64",
  "byteorder",
