@@ -20,15 +20,62 @@ struct Args {
     read_only: bool,
 }
 
-fn cmd_help() {
-    let helpstr = r#"Available commands:
-exit		Exit program
-get KEY		Retrieve and display value for specified KEY
-header		Display database global header
-help		This message
-version		Display program name and version"#;
+struct CmdInfo {
+    name: &'static str,
+    description: &'static str,
+    arginfo: &'static str,
+    min_args: usize,
+}
 
-    println!("{}", helpstr);
+const CMDINFO: [CmdInfo; 5] = [
+    CmdInfo {
+        name: "exit",
+        description: "Exit program",
+        arginfo: "",
+        min_args: 0,
+    },
+    CmdInfo {
+        name: "get",
+        description: "Retrieve and display value for specified KEY",
+        arginfo: "KEY",
+        min_args: 1,
+    },
+    CmdInfo {
+        name: "header",
+        description: "Display database global header",
+        arginfo: "",
+        min_args: 0,
+    },
+    CmdInfo {
+        name: "help",
+        description: "This message",
+        arginfo: "",
+        min_args: 0,
+    },
+    CmdInfo {
+        name: "version",
+        description: "Display program name and version",
+        arginfo: "",
+        min_args: 0,
+    },
+];
+
+fn get_cmd_metadata(cmd_name: &str) -> Option<CmdInfo> {
+    for metadata in CMDINFO {
+        if metadata.name == cmd_name {
+            return Some(metadata);
+        }
+    }
+
+    return None;
+}
+
+fn cmd_help() {
+    println!("Available commands:");
+
+    for metadata in CMDINFO {
+        println!("{}\t{}", metadata.name, metadata.description);
+    }
 }
 
 fn cmd_version() {
@@ -84,6 +131,20 @@ fn handle_line(db: &mut Gdbm, line: &String) -> bool {
 
     let cmd_name = &words[0];
     let cmd_args = &words[1..];
+    let cmd_metadata_res = get_cmd_metadata(cmd_name);
+
+    if cmd_metadata_res.is_none() {
+        println!("Unknown command");
+        return true;
+    }
+    let cmd_metadata = cmd_metadata_res.unwrap();
+    if cmd_metadata.min_args > cmd_args.len() {
+        println!(
+            "Command \"{}\" is missing one or more parameters.\nUsage: {} {}",
+            cmd_name, cmd_name, cmd_metadata.arginfo
+        );
+        return true;
+    }
 
     match cmd_name.as_ref() {
         "exit" => return false,
@@ -91,7 +152,7 @@ fn handle_line(db: &mut Gdbm, line: &String) -> bool {
         "header" => return cmd_header(&db),
         "help" => cmd_help(),
         "version" => cmd_version(),
-        _ => println!("Invalid or unknown command"),
+        _ => println!("BUG: CMDINFO out of sync in source"),
     }
 
     true
