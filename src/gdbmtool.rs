@@ -27,7 +27,7 @@ struct CmdInfo {
     min_args: usize,
 }
 
-const CMDINFO: [CmdInfo; 6] = [
+const CMDINFO: [CmdInfo; 7] = [
     CmdInfo {
         name: "dir",
         description: "Display hash directory",
@@ -54,13 +54,19 @@ const CMDINFO: [CmdInfo; 6] = [
     },
     CmdInfo {
         name: "help",
-        description: "This message",
+        description: "This help message",
         arginfo: "",
         min_args: 0,
     },
     CmdInfo {
         name: "version",
         description: "Display program name and version",
+        arginfo: "",
+        min_args: 0,
+    },
+    CmdInfo {
+        name: "?",
+        description: "This help message",
         arginfo: "",
         min_args: 0,
     },
@@ -92,8 +98,11 @@ fn cmd_version() {
 }
 
 fn cmd_dir(db: &Gdbm) {
+    println!("size {}", db.header.dir_sz);
+    println!("bits {}", db.header.dir_bits);
+
     for n in 0..db.dir.dir.len() {
-        println!("{} {}", n, db.dir.dir[n]);
+        println!("{}: {}", n, db.dir.dir[n]);
     }
 }
 
@@ -138,6 +147,10 @@ fn cmd_get(db: &mut Gdbm, args: &[String]) {
 fn handle_line(db: &mut Gdbm, line: &String) -> bool {
     let words = shellwords::split(&line).expect("Invalid command syntax");
 
+    if words.len() == 0 {
+        return true;
+    }
+
     let cmd_name = &words[0];
     let cmd_args = &words[1..];
     let cmd_metadata_res = get_cmd_metadata(cmd_name);
@@ -160,6 +173,7 @@ fn handle_line(db: &mut Gdbm, line: &String) -> bool {
         "exit" => return false,
         "get" => cmd_get(db, cmd_args),
         "header" => cmd_header(db),
+        "?" => cmd_help(),
         "help" => cmd_help(),
         "version" => cmd_version(),
         _ => println!("BUG: CMDINFO out of sync in source"),
