@@ -98,8 +98,11 @@ fn cmd_version() {
 }
 
 fn cmd_dir(db: &Gdbm) {
+    println!("size {}", db.header.dir_sz);
+    println!("bits {}", db.header.dir_bits);
+
     for n in 0..db.dir.dir.len() {
-        println!("{} {}", n, db.dir.dir[n]);
+        println!("{}: {}", n, db.dir.dir[n]);
     }
 }
 
@@ -143,6 +146,10 @@ fn cmd_get(db: &mut Gdbm, args: &[String]) {
 
 fn handle_line(db: &mut Gdbm, line: &String) -> bool {
     let words = shellwords::split(&line).expect("Invalid command syntax");
+
+    if words.len() == 0 {
+        return true;
+    }
 
     let cmd_name = &words[0];
     let cmd_args = &words[1..];
