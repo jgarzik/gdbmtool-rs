@@ -4,7 +4,7 @@ extern crate rustyline;
 extern crate shellwords;
 
 use clap::Parser;
-use rs_gdbm::Gdbm;
+use rs_gdbm::{Gdbm, GdbmOptions};
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
 use std::str;
@@ -185,7 +185,18 @@ fn handle_line(db: &mut Gdbm, line: &String) -> bool {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let mut db = Gdbm::open(&args.name).expect("Unable to open database");
+    let dbcfg = match args.read_only {
+        true => GdbmOptions {
+            readonly: true,
+            creat: false,
+        },
+        false => GdbmOptions {
+            readonly: false,
+            creat: true,
+        },
+    };
+
+    let mut db = Gdbm::open(&args.name, &dbcfg).expect("Unable to open db");
 
     let mut rl = DefaultEditor::new()?;
 

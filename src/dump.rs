@@ -2,7 +2,7 @@ extern crate clap;
 extern crate rs_gdbm;
 
 use clap::{Parser, ValueEnum};
-use rs_gdbm::{ExportBinMode, Gdbm};
+use rs_gdbm::{ExportBinMode, Gdbm, GdbmOptions};
 use std::fs::OpenOptions;
 
 #[derive(Parser, Debug)]
@@ -31,7 +31,11 @@ enum OutputFormat {
 fn main() {
     let args = Args::parse();
 
-    let mut db = Gdbm::open(&args.dbfn).expect("Unable to open database");
+    let dbcfg = GdbmOptions {
+        readonly: true,
+        creat: false,
+    };
+    let mut db = Gdbm::open(&args.dbfn, &dbcfg).expect("Unable to open db");
     let mut outf = OpenOptions::new()
         .read(true)
         .write(true)

@@ -27,9 +27,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle"
-version = "1.0.5"
+version = "1.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2faccea4cc4ab4a667ce676a30e8ec13922a692c99bb8f5b11f1502c72e04220"
+checksum = "8901269c6307e8d93993578286ac0edf7f195079ffff5ebdeea6a59ffb7e36bc"
 
 [[package]]
 name = "anstyle-parse"
@@ -311,8 +311,8 @@ checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
 
 [[package]]
 name = "rs-gdbm"
-version = "0.5.1"
-source = "git+https://github.com/jgarzik/gdbm-rs.git#3ea247f162bfd00c5ea8e0901e7147fb79714110"
+version = "0.5.2"
+source = "git+https://github.com/jgarzik/gdbm-rs.git#f71dea70793a9e6d8496e91fd18e0e9cff3a4361"
 dependencies = [
  "base64",
  "byteorder",
