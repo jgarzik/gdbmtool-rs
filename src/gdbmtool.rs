@@ -21,9 +21,16 @@ struct Args {
 }
 
 struct CmdInfo {
+    // User-input verb to trigger an action
     name: &'static str,
+
+    // Text description
     description: &'static str,
+
+    // Description of command args, if any
     arginfo: &'static str,
+
+    // Minimum required number of args supplied to command
     min_args: usize,
 }
 
@@ -72,6 +79,7 @@ const CMDINFO: [CmdInfo; 7] = [
     },
 ];
 
+// Lookup command metadata by command name
 fn get_cmd_metadata(cmd_name: &str) -> Option<CmdInfo> {
     for metadata in CMDINFO {
         if metadata.name == cmd_name {
@@ -82,6 +90,7 @@ fn get_cmd_metadata(cmd_name: &str) -> Option<CmdInfo> {
     return None;
 }
 
+// CMD: help
 fn cmd_help() {
     println!("Available commands:");
 
@@ -90,6 +99,7 @@ fn cmd_help() {
     }
 }
 
+// CMD: version
 fn cmd_version() {
     const PKG_NAME: &str = env!("CARGO_PKG_NAME");
     const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -97,6 +107,7 @@ fn cmd_version() {
     println!("{} {}", PKG_NAME, VERSION);
 }
 
+// CMD: dir
 fn cmd_dir(db: &Gdbm) {
     println!("size {}", db.header.dir_sz);
     println!("bits {}", db.header.dir_bits);
@@ -106,6 +117,7 @@ fn cmd_dir(db: &Gdbm) {
     }
 }
 
+// CMD: header
 fn cmd_header(db: &Gdbm) {
     let (dir_sz, dir_bits) = rs_gdbm::dir::build_dir_size(db.header.block_sz);
 
@@ -122,6 +134,7 @@ fn cmd_header(db: &Gdbm) {
     println!("avail-next-block {}", db.header.avail.next_block);
 }
 
+// CMD: get <key>
 fn cmd_get(db: &mut Gdbm, args: &[String]) {
     if args.len() < 1 {
         return;
@@ -144,6 +157,7 @@ fn cmd_get(db: &mut Gdbm, args: &[String]) {
     }
 }
 
+// Parse and dispatch a single line of text input
 fn handle_line(db: &mut Gdbm, line: &String) -> bool {
     let words = shellwords::split(&line).expect("Invalid command syntax");
 
@@ -173,8 +187,7 @@ fn handle_line(db: &mut Gdbm, line: &String) -> bool {
         "exit" => return false,
         "get" => cmd_get(db, cmd_args),
         "header" => cmd_header(db),
-        "?" => cmd_help(),
-        "help" => cmd_help(),
+        "?" | "help" => cmd_help(),
         "version" => cmd_version(),
         _ => println!("BUG: CMDINFO out of sync in source"),
     }
@@ -183,8 +196,10 @@ fn handle_line(db: &mut Gdbm, line: &String) -> bool {
 }
 
 fn main() -> Result<()> {
+    // parse command line arguments
     let args = Args::parse();
 
+    // open db, based on supplied configuration options
     let dbcfg = match args.read_only {
         true => GdbmOptions {
             readonly: true,
@@ -200,11 +215,15 @@ fn main() -> Result<()> {
 
     let mut rl = DefaultEditor::new()?;
 
+    // program main loop
     loop {
         let readline = rl.readline("gdbm> ");
         match readline {
             Ok(line) => {
+                // remember in history buffer
                 let _ = rl.add_history_entry(line.as_str());
+
+                // parse and dispatch user input
                 if !handle_line(&mut db, &line) {
                     break;
                 }
