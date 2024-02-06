@@ -21,21 +21,24 @@ struct Args {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
 enum OutputFormat {
-    /// binary format
+    /// Binary dump format
     Binary,
 
-    /// ascii format
+    /// ASCII dump format
     Ascii,
 }
 
 fn main() {
     let args = Args::parse();
 
+    // Open db in read-only mode
     let dbcfg = GdbmOptions {
         readonly: true,
         creat: false,
     };
     let mut db = Gdbm::open(&args.dbfn, &dbcfg).expect("Unable to open db");
+
+    // Open write+create output dump file
     let mut outf = OpenOptions::new()
         .read(true)
         .write(true)
@@ -43,6 +46,7 @@ fn main() {
         .open(&args.outfn)
         .expect("Unable to open output file");
 
+    // Call export API
     let _iores = match args.format {
         OutputFormat::Binary => db
             .export_bin(&mut outf, ExportBinMode::ExpNative)
