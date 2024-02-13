@@ -1,10 +1,11 @@
+
 extern crate clap;
-extern crate rs_gdbm;
 extern crate rustyline;
 extern crate shellwords;
+extern crate gdbm_native;
 
 use clap::Parser;
-use rs_gdbm::{Gdbm, GdbmOptions};
+use gdbm_native::{Gdbm, GdbmOptions};
 use rustyline::error::ReadlineError;
 use rustyline::{DefaultEditor, Result};
 use std::str;
@@ -119,7 +120,7 @@ fn cmd_dir(db: &Gdbm) {
 
 // CMD: header
 fn cmd_header(db: &Gdbm) {
-    let (dir_sz, dir_bits) = rs_gdbm::dir::build_dir_size(db.header.block_sz);
+    let (dir_sz, dir_bits) = gdbm_native::dir::build_dir_size(db.header.block_sz);
 
     println!("magic {:#x}", db.header.magic);
     println!("dir-offset {}", db.header.dir_ofs);

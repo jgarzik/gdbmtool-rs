@@ -1,8 +1,9 @@
+
 extern crate clap;
-extern crate rs_gdbm;
+extern crate gdbm_native;
 
 use clap::{Parser, ValueEnum};
-use rs_gdbm::{ExportBinMode, Gdbm, GdbmOptions};
+use gdbm_native::{ExportBinMode, Gdbm, GdbmOptions};
 use std::fs::OpenOptions;
 
 #[derive(Parser, Debug)]
