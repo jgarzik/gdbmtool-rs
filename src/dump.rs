@@ -1,4 +1,3 @@
-
 extern crate clap;
 extern crate gdbm_native;
 
@@ -44,11 +43,12 @@ fn main() {
         .read(true)
         .write(true)
         .create(true)
+        .truncate(true)
         .open(&args.outfn)
         .expect("Unable to open output file");
 
     // Call export API
-    let _iores = match args.format {
+    match args.format {
         OutputFormat::Binary => db
             .export_bin(&mut outf, ExportBinMode::ExpNative)
             .expect("Output error"),

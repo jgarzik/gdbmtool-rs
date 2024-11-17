@@ -1,8 +1,7 @@
-
 extern crate clap;
+extern crate gdbm_native;
 extern crate rustyline;
 extern crate shellwords;
-extern crate gdbm_native;
 
 use clap::Parser;
 use gdbm_native::{Gdbm, GdbmOptions};
@@ -82,13 +81,9 @@ const CMDINFO: [CmdInfo; 7] = [
 
 // Lookup command metadata by command name
 fn get_cmd_metadata(cmd_name: &str) -> Option<CmdInfo> {
-    for metadata in CMDINFO {
-        if metadata.name == cmd_name {
-            return Some(metadata);
-        }
-    }
-
-    return None;
+    CMDINFO
+        .into_iter()
+        .find(|metadata| metadata.name == cmd_name)
 }
 
 // CMD: help
@@ -137,7 +132,7 @@ fn cmd_header(db: &Gdbm) {
 
 // CMD: get <key>
 fn cmd_get(db: &mut Gdbm, args: &[String]) {
-    if args.len() < 1 {
+    if args.is_empty() {
         return;
     }
 
@@ -159,10 +154,10 @@ fn cmd_get(db: &mut Gdbm, args: &[String]) {
 }
 
 // Parse and dispatch a single line of text input
-fn handle_line(db: &mut Gdbm, line: &String) -> bool {
-    let words = shellwords::split(&line).expect("Invalid command syntax");
+fn handle_line(db: &mut Gdbm, line: &str) -> bool {
+    let words = shellwords::split(line).expect("Invalid command syntax");
 
-    if words.len() == 0 {
+    if words.is_empty() {
         return true;
     }
 
