@@ -2,8 +2,7 @@ extern crate clap;
 extern crate gdbm_native;
 
 use clap::{Parser, ValueEnum};
-use gdbm_native::{ExportBinMode, Gdbm, GdbmOptions};
-use std::fs::OpenOptions;
+use gdbm_native::{ExportBinMode, OpenOptions};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -32,14 +31,12 @@ fn main() {
     let args = Args::parse();
 
     // Open db in read-only mode
-    let dbcfg = GdbmOptions {
-        readonly: true,
-        creat: false,
-    };
-    let mut db = Gdbm::open(&args.dbfn, &dbcfg).expect("Unable to open db");
+    let mut db = OpenOptions::new()
+        .open(&args.dbfn)
+        .expect("Unable to open db");
 
     // Open write+create output dump file
-    let mut outf = OpenOptions::new()
+    let mut outf = std::fs::OpenOptions::new()
         .read(true)
         .write(true)
         .create(true)
