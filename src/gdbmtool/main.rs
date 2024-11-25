@@ -5,8 +5,10 @@ extern crate shellwords;
 
 mod context;
 mod database;
+mod display;
 
 use clap::{arg, command, value_parser};
+use display::display;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::io::{BufRead, IsTerminal};
@@ -80,7 +82,7 @@ fn interactive(mut context: Context) -> ExitCode {
                     Some(("exit", _)) => break ExitCode::SUCCESS,
                     Some((name, matches)) => context
                         .dispatch(name, matches)
-                        .map(|lines| lines.into_iter().for_each(|l| println!("{l}")))
+                        .map(display)
                         .unwrap_or_else(|e| eprintln!("{e}")),
                     None => unreachable!(),
                 },
