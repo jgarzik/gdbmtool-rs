@@ -37,6 +37,10 @@ impl Database {
                 .about("Insert VALUE for specified KEY, showing the old value if there was one")
                 .arg(arg!(<KEY> "Key to insert").required(true))
                 .arg(arg!(<VALUE> "Value to set").required(true)),
+            clap::Command::new("try-insert")
+                .about("Try inserting VALUE for specified KEY, failing if the key is already used")
+                .arg(arg!(<KEY> "Key to insert").required(true))
+                .arg(arg!(<VALUE> "Value to set").required(true)),
             clap::Command::new("remove")
                 .about("Remove VALUE for specified KEY, showing the old value if there was one")
                 .arg(arg!(<KEY> "Key to look up").required(true)),
@@ -56,6 +60,12 @@ impl Database {
                 .map(|value| value.into_iter().collect()),
             "insert" => self
                 .insert(
+                    matches.get_one::<String>("KEY").unwrap(),
+                    matches.get_one::<String>("VALUE").unwrap(),
+                )
+                .map(|value| value.into_iter().collect()),
+            "try-insert" => self
+                .try_insert(
                     matches.get_one::<String>("KEY").unwrap(),
                     matches.get_one::<String>("VALUE").unwrap(),
                 )
@@ -99,6 +109,21 @@ impl Database {
             Self::ReadWrite(db) => db
                 .insert(key.as_ref(), value.as_ref())
                 .map_err(|e| e.to_string())
+                .and_then(|old| {
+                    old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
+                        .transpose()
+                        .map_err(|e| e.to_string())
+                }),
+        }
+    }
+
+    fn try_insert(&mut self, key: &str, value: &str) -> Result<Option<String>, String> {
+        match self {
+            Self::ReadOnly(_) => Err("readonly database".to_string()),
+            Self::ReadWrite(db) => db
+                .try_insert(key.as_ref(), value.as_ref())
+                .map_err(|e| e.to_string())
+                .map(|(_, old)| old)
                 .and_then(|old| {
                     old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
                         .transpose()
