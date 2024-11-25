@@ -30,6 +30,7 @@ impl Database {
         vec![
             clap::Command::new("header").about("Display database header"),
             clap::Command::new("dir").about("Display database directory"),
+            clap::Command::new("len").about("Show the number of entries in the database"),
             clap::Command::new("get")
                 .about("Retrieve and display value for specified KEY")
                 .arg(arg!(<KEY> "Key to look up").required(true)),
@@ -55,6 +56,7 @@ impl Database {
         match name {
             "header" => Ok(self.header()),
             "dir" => Ok(self.directory()),
+            "len" => self.len().map(|l| vec![format!("{l}")]),
             "get" => self
                 .get(matches.get_one::<String>("KEY").unwrap())
                 .map(|value| value.into_iter().collect()),
@@ -93,6 +95,14 @@ impl Database {
             Self::ReadWrite(db) => db.show_directory(&mut buffer),
         };
         buffer.lines().map(|l| l.unwrap()).collect()
+    }
+
+    fn len(&mut self) -> Result<usize, String> {
+        match self {
+            Self::ReadOnly(db) => db.len(),
+            Self::ReadWrite(db) => db.len(),
+        }
+        .map_err(|e| e.to_string())
     }
 
     fn get(&mut self, key: &str) -> Result<Option<String>, String> {
