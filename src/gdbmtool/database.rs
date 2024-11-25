@@ -33,6 +33,10 @@ impl Database {
             clap::Command::new("get")
                 .about("Retrieve and display value for specified KEY")
                 .arg(arg!(<KEY> "Key to look up").required(true)),
+            clap::Command::new("insert")
+                .about("Insert VALUE for specified KEY, showing the old value if there was one")
+                .arg(arg!(<KEY> "Key to insert").required(true))
+                .arg(arg!(<VALUE> "Value to set").required(true)),
         ]
     }
 
@@ -46,6 +50,12 @@ impl Database {
             "dir" => Ok(self.directory()),
             "get" => self
                 .get(matches.get_one::<String>("KEY").unwrap())
+                .map(|value| value.into_iter().collect()),
+            "insert" => self
+                .insert(
+                    matches.get_one::<String>("KEY").unwrap(),
+                    matches.get_one::<String>("VALUE").unwrap(),
+                )
                 .map(|value| value.into_iter().collect()),
             _ => unreachable!("no such command"),
         }
@@ -75,5 +85,19 @@ impl Database {
             Self::ReadWrite(db) => db.get::<&str, String>(key),
         }
         .map_err(|e| e.to_string())
+    }
+
+    fn insert(&mut self, key: &str, value: &str) -> Result<Option<String>, String> {
+        match self {
+            Self::ReadOnly(_) => Err("readonly database".to_string()),
+            Self::ReadWrite(db) => db
+                .insert(key.as_ref(), value.as_ref())
+                .map_err(|e| e.to_string())
+                .and_then(|old| {
+                    old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
+                        .transpose()
+                        .map_err(|e| e.to_string())
+                }),
+        }
     }
 }
