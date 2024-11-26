@@ -20,7 +20,16 @@ use context::Context;
 
 fn main() -> ExitCode {
     let cmd = command!()
-        .arg(arg!(-r --"read-only" "Open database read-only"))
+        .arg(
+            arg!(-r --"read-only" "Open database read-only")
+                .conflicts_with_all(["create", "block-size"]),
+        )
+        .arg(arg!(-c --create "Create a new database if the database file is missing"))
+        .arg(
+            arg!(-b --"block-size" <SIZE> "Block size for new databases")
+                .value_parser(value_parser!(u32)),
+        )
+        .arg(arg!(--"cache-size" <SIZE> "Size of memory cache").value_parser(value_parser!(usize)))
         .arg(
             arg!(<FILE> "Database filename")
                 .required(false)
@@ -30,7 +39,11 @@ fn main() -> ExitCode {
 
     let matches = cmd.get_matches();
 
-    let mut context = Context::new().write(!matches.get_flag("read-only"));
+    let mut context = Context::new()
+        .write(!matches.get_flag("read-only"))
+        .create(matches.get_flag("create"))
+        .block_size(matches.get_one("block-size").copied())
+        .cache_size(matches.get_one("cache-size").copied());
 
     if let Ok(Some(filename)) = matches.try_get_one::<PathBuf>("FILE") {
         context = context.filename(Some(filename.clone()));

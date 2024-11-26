@@ -9,20 +9,44 @@ pub enum Database {
 }
 
 impl Database {
-    pub fn open_ro(filename: &Path) -> Result<Self, String> {
+    pub fn open_ro(filename: &Path, cache_size: Option<usize>) -> Result<Self, String> {
         Ok(Self::ReadOnly(
             OpenOptions::new()
+                .cachesize(cache_size)
                 .open(filename)
                 .map_err(|e| e.to_string())?,
         ))
     }
 
-    pub fn open_rw(filename: &Path) -> Result<Self, String> {
+    pub fn open_rw(
+        filename: &Path,
+        cache_size: Option<usize>,
+        create: bool,
+        block_size: Option<u32>,
+    ) -> Result<Self, String> {
         Ok(Self::ReadWrite(
-            OpenOptions::new()
-                .write()
-                .open(filename)
-                .map_err(|e| e.to_string())?,
+            if create {
+                if let Some(block_size) = block_size {
+                    OpenOptions::new()
+                        .cachesize(cache_size)
+                        .write()
+                        .create()
+                        .block_size(gdbm_native::BlockSize::Roughly(block_size))
+                        .open(filename)
+                } else {
+                    OpenOptions::new()
+                        .cachesize(cache_size)
+                        .write()
+                        .create()
+                        .open(filename)
+                }
+            } else {
+                OpenOptions::new()
+                    .cachesize(cache_size)
+                    .write()
+                    .open(filename)
+            }
+            .map_err(|e| e.to_string())?,
         ))
     }
 
