@@ -56,28 +56,15 @@ impl Database {
         name: &str,
         matches: &clap::ArgMatches,
     ) -> Result<Vec<String>, String> {
+        let arg = |name| matches.get_one::<String>(name);
         match name {
             "header" => Ok(self.header()),
             "dir" => Ok(self.directory()),
             "len" => self.len().map(|l| vec![format!("{l}")]),
-            "get" => self
-                .get(matches.get_one::<String>("KEY").unwrap())
-                .map(|value| value.into_iter().collect()),
-            "insert" => self
-                .insert(
-                    matches.get_one::<String>("KEY").unwrap(),
-                    matches.get_one::<String>("VALUE").unwrap(),
-                )
-                .map(|value| value.into_iter().collect()),
-            "try-insert" => self
-                .try_insert(
-                    matches.get_one::<String>("KEY").unwrap(),
-                    matches.get_one::<String>("VALUE").unwrap(),
-                )
-                .map(|value| value.into_iter().collect()),
-            "remove" => self
-                .remove(matches.get_one::<String>("KEY").unwrap())
-                .map(|value| value.into_iter().collect()),
+            "get" => self.get(arg("KEY").unwrap()),
+            "insert" => self.insert(arg("KEY").unwrap(), arg("VALUE").unwrap()),
+            "try-insert" => self.try_insert(arg("KEY").unwrap(), arg("VALUE").unwrap()),
+            "remove" => self.remove(arg("KEY").unwrap()),
             "keys" => self.keys(),
             "values" => self.values(),
             "elements" => self.elements(),
@@ -111,15 +98,16 @@ impl Database {
         .map_err(|e| e.to_string())
     }
 
-    fn get(&mut self, key: &str) -> Result<Option<String>, String> {
+    fn get(&mut self, key: &str) -> Result<Vec<String>, String> {
         match self {
             Self::ReadOnly(db) => db.get::<&str, String>(key),
             Self::ReadWrite(db) => db.get::<&str, String>(key),
         }
+        .map(|value| value.into_iter().collect())
         .map_err(|e| e.to_string())
     }
 
-    fn insert(&mut self, key: &str, value: &str) -> Result<Option<String>, String> {
+    fn insert(&mut self, key: &str, value: &str) -> Result<Vec<String>, String> {
         match self {
             Self::ReadOnly(_) => Err("readonly database".to_string()),
             Self::ReadWrite(db) => db
@@ -131,9 +119,10 @@ impl Database {
                         .map_err(|e| e.to_string())
                 }),
         }
+        .map(|value| value.into_iter().collect())
     }
 
-    fn try_insert(&mut self, key: &str, value: &str) -> Result<Option<String>, String> {
+    fn try_insert(&mut self, key: &str, value: &str) -> Result<Vec<String>, String> {
         match self {
             Self::ReadOnly(_) => Err("readonly database".to_string()),
             Self::ReadWrite(db) => db
@@ -146,9 +135,10 @@ impl Database {
                         .map_err(|e| e.to_string())
                 }),
         }
+        .map(|value| value.into_iter().collect())
     }
 
-    fn remove(&mut self, key: &str) -> Result<Option<String>, String> {
+    fn remove(&mut self, key: &str) -> Result<Vec<String>, String> {
         match self {
             Self::ReadOnly(_) => Err("readonly database".to_string()),
             Self::ReadWrite(db) => db.remove(key).map_err(|e| e.to_string()).and_then(|old| {
@@ -157,6 +147,7 @@ impl Database {
                     .map_err(|e| e.to_string())
             }),
         }
+        .map(|value| value.into_iter().collect())
     }
 
     fn keys(&mut self) -> Result<Vec<String>, String> {
