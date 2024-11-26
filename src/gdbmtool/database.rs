@@ -45,6 +45,9 @@ impl Database {
             clap::Command::new("remove")
                 .about("Remove VALUE for specified KEY, showing the old value if there was one")
                 .arg(arg!(<KEY> "Key to look up").required(true)),
+            clap::Command::new("keys").about("List database keys"),
+            clap::Command::new("values").about("List database values"),
+            clap::Command::new("elements").about("List database elements"),
         ]
     }
 
@@ -75,6 +78,9 @@ impl Database {
             "remove" => self
                 .remove(matches.get_one::<String>("KEY").unwrap())
                 .map(|value| value.into_iter().collect()),
+            "keys" => self.keys(),
+            "values" => self.values(),
+            "elements" => self.elements(),
             _ => unreachable!("no such command"),
         }
     }
@@ -151,5 +157,33 @@ impl Database {
                     .map_err(|e| e.to_string())
             }),
         }
+    }
+
+    fn keys(&mut self) -> Result<Vec<String>, String> {
+        match self {
+            Self::ReadOnly(db) => db.keys().collect::<Result<_, _>>(),
+            Self::ReadWrite(db) => db.keys().collect::<Result<_, _>>(),
+        }
+        .map_err(|e| e.to_string())
+    }
+
+    fn values(&mut self) -> Result<Vec<String>, String> {
+        match self {
+            Self::ReadOnly(db) => db.values().collect::<Result<_, _>>(),
+            Self::ReadWrite(db) => db.values().collect::<Result<_, _>>(),
+        }
+        .map_err(|e| e.to_string())
+    }
+
+    fn elements(&mut self) -> Result<Vec<String>, String> {
+        let format = |element: Result<(String, String), _>| {
+            element.map(|(key, value)| format!("{key} => {value}"))
+        };
+
+        match self {
+            Self::ReadOnly(db) => db.iter().map(format).collect::<Result<_, _>>(),
+            Self::ReadWrite(db) => db.iter().map(format).collect::<Result<_, _>>(),
+        }
+        .map_err(|e| e.to_string())
     }
 }
