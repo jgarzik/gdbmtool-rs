@@ -71,7 +71,7 @@ impl Database {
                 .arg(arg!(<KEY> "Key to look up").required(true)),
             clap::Command::new("keys").about("List database keys"),
             clap::Command::new("values").about("List database values"),
-            clap::Command::new("elements").about("List database elements"),
+            clap::Command::new("entries").about("List database entries"),
         ]
     }
 
@@ -91,7 +91,7 @@ impl Database {
             "remove" => self.remove(arg("KEY").unwrap()),
             "keys" => self.keys(),
             "values" => self.values(),
-            "elements" => self.elements(),
+            "entries" => self.entries(),
             _ => unreachable!("no such command"),
         }
     }
@@ -190,7 +190,7 @@ impl Database {
         .map_err(|e| e.to_string())
     }
 
-    fn elements(&mut self) -> Result<Vec<String>, String> {
+    fn entries(&mut self) -> Result<Vec<String>, String> {
         let format = |element: Result<(String, String), _>| {
             element.map(|(key, value)| format!("{key} => {value}"))
         };
