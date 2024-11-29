@@ -1,7 +1,7 @@
-use clap::arg;
+use clap::{arg, value_parser};
 use gdbm_native::{Gdbm, OpenOptions, ReadOnly, ReadWrite};
 use std::io::BufRead;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub enum Database {
     ReadOnly(Gdbm<ReadOnly>),
@@ -72,6 +72,20 @@ impl Database {
             clap::Command::new("keys").about("List database keys"),
             clap::Command::new("values").about("List database values"),
             clap::Command::new("entries").about("List database entries"),
+            clap::Command::new("load")
+                .about("Import entries from an ASCII dump file")
+                .arg(
+                    arg!(<FILE> "Filename of dump file")
+                        .required(true)
+                        .value_parser(value_parser!(PathBuf)),
+                ),
+            clap::Command::new("dump")
+                .about("Export database entries to an ASCII dump file")
+                .arg(
+                    arg!(<FILE> "Filename of dump file")
+                        .required(true)
+                        .value_parser(value_parser!(PathBuf)),
+                ),
         ]
     }
 
@@ -80,18 +94,21 @@ impl Database {
         name: &str,
         matches: &clap::ArgMatches,
     ) -> Result<Vec<String>, String> {
-        let arg = |name| matches.get_one::<String>(name);
+        let sarg = |name| matches.get_one::<String>(name);
+        let parg = |name| matches.get_one::<PathBuf>(name);
         match name {
             "header" => Ok(self.header()),
             "dir" => Ok(self.directory()),
             "len" => self.len().map(|l| vec![format!("{l}")]),
-            "get" => self.get(arg("KEY").unwrap()),
-            "insert" => self.insert(arg("KEY").unwrap(), arg("VALUE").unwrap()),
-            "try-insert" => self.try_insert(arg("KEY").unwrap(), arg("VALUE").unwrap()),
-            "remove" => self.remove(arg("KEY").unwrap()),
+            "get" => self.get(sarg("KEY").unwrap()),
+            "insert" => self.insert(sarg("KEY").unwrap(), sarg("VALUE").unwrap()),
+            "try-insert" => self.try_insert(sarg("KEY").unwrap(), sarg("VALUE").unwrap()),
+            "remove" => self.remove(sarg("KEY").unwrap()),
             "keys" => self.keys(),
             "values" => self.values(),
             "entries" => self.entries(),
+            "load" => self.load(parg("FILE").unwrap()),
+            "dump" => self.dump(parg("FILE").unwrap()),
             _ => unreachable!("no such command"),
         }
     }
@@ -199,6 +216,32 @@ impl Database {
             Self::ReadOnly(db) => db.iter().map(format).collect::<Result<_, _>>(),
             Self::ReadWrite(db) => db.iter().map(format).collect::<Result<_, _>>(),
         }
+        .map_err(|e| e.to_string())
+    }
+
+    fn load(&mut self, filename: &Path) -> Result<Vec<String>, String> {
+        match self {
+            Self::ReadOnly(_) => Err("readonly database".to_string()),
+            Self::ReadWrite(db) => std::fs::File::open(filename)
+                .map_err(|e| e.to_string())
+                .and_then(|mut f| db.import_ascii(&mut f).map_err(|e| e.to_string()))
+                .map(|_| vec![]),
+        }
+    }
+
+    fn dump(&mut self, filename: &Path) -> Result<Vec<String>, String> {
+        let mut file = std::fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(filename)
+            .map_err(|e| e.to_string())?;
+
+        match self {
+            Self::ReadOnly(db) => db.export_ascii(&mut file),
+            Self::ReadWrite(db) => db.export_ascii(&mut file),
+        }
+        .map(|_| vec![])
         .map_err(|e| e.to_string())
     }
 }
