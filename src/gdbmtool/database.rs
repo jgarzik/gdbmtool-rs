@@ -1,21 +1,13 @@
 use clap::{arg, value_parser};
-use gdbm_native::{Gdbm, OpenOptions, ReadOnly, ReadWrite};
+use gdbm_native::{Gdbm, ImportMode, OpenOptions};
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
 
-pub enum Database {
-    ReadOnly(Gdbm<ReadOnly>),
-    ReadWrite(Gdbm<ReadWrite>),
-}
+pub struct Database(Gdbm);
 
 impl Database {
     pub fn open_ro(filename: &Path, cache_size: Option<usize>) -> Result<Self, String> {
-        Ok(Self::ReadOnly(
-            OpenOptions::new()
-                .cachesize(cache_size)
-                .open(filename)
-                .map_err(|e| e.to_string())?,
-        ))
+        Self::open(filename, cache_size, false, false, None)
     }
 
     pub fn open_rw(
@@ -24,30 +16,25 @@ impl Database {
         create: bool,
         block_size: Option<u32>,
     ) -> Result<Self, String> {
-        Ok(Self::ReadWrite(
-            if create {
-                if let Some(block_size) = block_size {
-                    OpenOptions::new()
-                        .cachesize(cache_size)
-                        .write()
-                        .create()
-                        .block_size(gdbm_native::BlockSize::Roughly(block_size))
-                        .open(filename)
-                } else {
-                    OpenOptions::new()
-                        .cachesize(cache_size)
-                        .write()
-                        .create()
-                        .open(filename)
-                }
-            } else {
-                OpenOptions::new()
-                    .cachesize(cache_size)
-                    .write()
-                    .open(filename)
-            }
-            .map_err(|e| e.to_string())?,
-        ))
+        Self::open(filename, cache_size, true, create, block_size)
+    }
+
+    fn open(
+        filename: &Path,
+        cache_size: Option<usize>,
+        write: bool,
+        create: bool,
+        block_size: Option<u32>,
+    ) -> Result<Self, String> {
+        let mut options = OpenOptions::new();
+        options.write(write).create(create);
+        if let Some(cache_size) = cache_size {
+            options.cachesize(cache_size);
+        }
+        if let Some(block_size) = block_size {
+            options.block_size(gdbm_native::BlockSize::Roughly(block_size));
+        }
+        options.open(filename).map(Self).map_err(|e| e.to_string())
     }
 
     pub fn commands() -> Vec<clap::Command> {
@@ -115,121 +102,82 @@ impl Database {
 
     fn header(&self) -> Vec<String> {
         let mut buffer = vec![];
-        let _ = match self {
-            Self::ReadOnly(db) => db.show_header(&mut buffer),
-            Self::ReadWrite(db) => db.show_header(&mut buffer),
-        };
+        let _ = self.0.show_header(&mut buffer);
         buffer.lines().map(|l| l.unwrap()).collect()
     }
 
     fn directory(&self) -> Vec<String> {
         let mut buffer = vec![];
-        let _ = match self {
-            Self::ReadOnly(db) => db.show_directory(&mut buffer),
-            Self::ReadWrite(db) => db.show_directory(&mut buffer),
-        };
+        let _ = self.0.show_directory(&mut buffer);
         buffer.lines().map(|l| l.unwrap()).collect()
     }
 
-    fn len(&mut self) -> Result<usize, String> {
-        match self {
-            Self::ReadOnly(db) => db.len(),
-            Self::ReadWrite(db) => db.len(),
-        }
-        .map_err(|e| e.to_string())
+    fn len(&self) -> Result<usize, String> {
+        self.0.len().map_err(|e| e.to_string())
     }
 
-    fn get(&mut self, key: &str) -> Result<Vec<String>, String> {
-        match self {
-            Self::ReadOnly(db) => db.get::<str, String>(key),
-            Self::ReadWrite(db) => db.get::<str, String>(key),
-        }
-        .map(|value| value.into_iter().collect())
-        .map_err(|e| e.to_string())
+    fn get(&self, key: &str) -> Result<Vec<String>, String> {
+        self.0
+            .get::<str, String>(key)
+            .map(|value| value.into_iter().collect())
+            .map_err(|e| e.to_string())
+    }
+
+    // previous value, if any, as text
+    fn old_value(old: gdbm_native::Result<Option<Vec<u8>>>) -> Result<Vec<String>, String> {
+        old.map_err(|e| e.to_string()).and_then(|old| {
+            old.map(|v| String::from_utf8(v).map_err(|e| e.to_string()))
+                .transpose()
+                .map(|value| value.into_iter().collect())
+        })
     }
 
     fn insert(&mut self, key: &str, value: &str) -> Result<Vec<String>, String> {
-        match self {
-            Self::ReadOnly(_) => Err("readonly database".to_string()),
-            Self::ReadWrite(db) => {
-                db.insert(key, value)
-                    .map_err(|e| e.to_string())
-                    .and_then(|old| {
-                        old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
-                            .transpose()
-                            .map_err(|e| e.to_string())
-                    })
-            }
-        }
-        .map(|value| value.into_iter().collect())
+        Self::old_value(self.0.insert(key, value))
     }
 
     fn try_insert(&mut self, key: &str, value: &str) -> Result<Vec<String>, String> {
-        match self {
-            Self::ReadOnly(_) => Err("readonly database".to_string()),
-            Self::ReadWrite(db) => db
-                .try_insert(key, value)
-                .map_err(|e| e.to_string())
-                .and_then(|old| {
-                    old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
-                        .transpose()
-                        .map_err(|e| e.to_string())
-                }),
-        }
-        .map(|value| value.into_iter().collect())
+        Self::old_value(self.0.try_insert(key, value))
     }
 
     fn remove(&mut self, key: &str) -> Result<Vec<String>, String> {
-        match self {
-            Self::ReadOnly(_) => Err("readonly database".to_string()),
-            Self::ReadWrite(db) => db.remove(key).map_err(|e| e.to_string()).and_then(|old| {
-                old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
-                    .transpose()
-                    .map_err(|e| e.to_string())
-            }),
-        }
-        .map(|value| value.into_iter().collect())
+        Self::old_value(self.0.remove(key))
     }
 
-    fn keys(&mut self) -> Result<Vec<String>, String> {
-        match self {
-            Self::ReadOnly(db) => db.keys().collect::<Result<_, _>>(),
-            Self::ReadWrite(db) => db.keys().collect::<Result<_, _>>(),
-        }
-        .map_err(|e| e.to_string())
+    fn keys(&self) -> Result<Vec<String>, String> {
+        self.0
+            .keys()
+            .collect::<Result<_, _>>()
+            .map_err(|e| e.to_string())
     }
 
-    fn values(&mut self) -> Result<Vec<String>, String> {
-        match self {
-            Self::ReadOnly(db) => db.values().collect::<Result<_, _>>(),
-            Self::ReadWrite(db) => db.values().collect::<Result<_, _>>(),
-        }
-        .map_err(|e| e.to_string())
+    fn values(&self) -> Result<Vec<String>, String> {
+        self.0
+            .values()
+            .collect::<Result<_, _>>()
+            .map_err(|e| e.to_string())
     }
 
-    fn entries(&mut self) -> Result<Vec<String>, String> {
-        let format = |element: Result<(String, String), _>| {
-            element.map(|(key, value)| format!("{key} => {value}"))
-        };
-
-        match self {
-            Self::ReadOnly(db) => db.iter().map(format).collect::<Result<_, _>>(),
-            Self::ReadWrite(db) => db.iter().map(format).collect::<Result<_, _>>(),
-        }
-        .map_err(|e| e.to_string())
+    fn entries(&self) -> Result<Vec<String>, String> {
+        self.0
+            .iter::<String, String>()
+            .map(|element| element.map(|(key, value)| format!("{key} => {value}")))
+            .collect::<Result<_, _>>()
+            .map_err(|e| e.to_string())
     }
 
     fn load(&mut self, filename: &Path) -> Result<Vec<String>, String> {
-        match self {
-            Self::ReadOnly(_) => Err("readonly database".to_string()),
-            Self::ReadWrite(db) => std::fs::File::open(filename)
-                .map_err(|e| e.to_string())
-                .and_then(|mut f| db.import_ascii(&mut f).map_err(|e| e.to_string()))
-                .map(|_| vec![]),
-        }
+        std::fs::File::open(filename)
+            .map_err(|e| e.to_string())
+            .and_then(|mut f| {
+                self.0
+                    .import_ascii(&mut f, ImportMode::Replace)
+                    .map_err(|e| e.to_string())
+            })
+            .map(|_| vec![])
     }
 
-    fn dump(&mut self, filename: &Path) -> Result<Vec<String>, String> {
+    fn dump(&self, filename: &Path) -> Result<Vec<String>, String> {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
@@ -237,11 +185,9 @@ impl Database {
             .open(filename)
             .map_err(|e| e.to_string())?;
 
-        match self {
-            Self::ReadOnly(db) => db.export_ascii(&mut file, None::<&Path>),
-            Self::ReadWrite(db) => db.export_ascii(&mut file, None::<&Path>),
-        }
-        .map(|_| vec![])
-        .map_err(|e| e.to_string())
+        self.0
+            .export_ascii(&mut file, None::<&Path>)
+            .map(|_| vec![])
+            .map_err(|e| e.to_string())
     }
 }

@@ -2,7 +2,7 @@ extern crate clap;
 extern crate gdbm_native;
 
 use clap::{Parser, ValueEnum};
-use gdbm_native::{ExportBinMode, OpenOptions};
+use gdbm_native::{BinDumpFormat, OpenOptions};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -31,7 +31,7 @@ fn main() {
     let args = Args::parse();
 
     // Open db in read-only mode
-    let mut db = OpenOptions::new()
+    let db = OpenOptions::new()
         .open(&args.dbfn)
         .expect("Unable to open db");
 
@@ -47,7 +47,7 @@ fn main() {
     // Call export API
     match args.format {
         OutputFormat::Binary => db
-            .export_bin(&mut outf, ExportBinMode::ExpNative)
+            .export_bin(&mut outf, BinDumpFormat::host())
             .expect("Output error"),
         OutputFormat::Ascii => db
             .export_ascii(&mut outf, Some(&args.dbfn))
