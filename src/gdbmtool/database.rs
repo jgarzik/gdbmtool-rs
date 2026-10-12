@@ -141,8 +141,8 @@ impl Database {
 
     fn get(&mut self, key: &str) -> Result<Vec<String>, String> {
         match self {
-            Self::ReadOnly(db) => db.get::<&str, String>(key),
-            Self::ReadWrite(db) => db.get::<&str, String>(key),
+            Self::ReadOnly(db) => db.get::<str, String>(key),
+            Self::ReadWrite(db) => db.get::<str, String>(key),
         }
         .map(|value| value.into_iter().collect())
         .map_err(|e| e.to_string())
@@ -151,14 +151,15 @@ impl Database {
     fn insert(&mut self, key: &str, value: &str) -> Result<Vec<String>, String> {
         match self {
             Self::ReadOnly(_) => Err("readonly database".to_string()),
-            Self::ReadWrite(db) => db
-                .insert(key.as_ref(), value.as_ref())
-                .map_err(|e| e.to_string())
-                .and_then(|old| {
-                    old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
-                        .transpose()
-                        .map_err(|e| e.to_string())
-                }),
+            Self::ReadWrite(db) => {
+                db.insert(key, value)
+                    .map_err(|e| e.to_string())
+                    .and_then(|old| {
+                        old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
+                            .transpose()
+                            .map_err(|e| e.to_string())
+                    })
+            }
         }
         .map(|value| value.into_iter().collect())
     }
@@ -167,9 +168,8 @@ impl Database {
         match self {
             Self::ReadOnly(_) => Err("readonly database".to_string()),
             Self::ReadWrite(db) => db
-                .try_insert(key.as_ref(), value.as_ref())
+                .try_insert(key, value)
                 .map_err(|e| e.to_string())
-                .map(|(_, old)| old)
                 .and_then(|old| {
                     old.map(|v| std::str::from_utf8(v.as_ref()).map(|v| v.to_string()))
                         .transpose()
@@ -238,8 +238,8 @@ impl Database {
             .map_err(|e| e.to_string())?;
 
         match self {
-            Self::ReadOnly(db) => db.export_ascii(&mut file),
-            Self::ReadWrite(db) => db.export_ascii(&mut file),
+            Self::ReadOnly(db) => db.export_ascii(&mut file, None::<&Path>),
+            Self::ReadWrite(db) => db.export_ascii(&mut file, None::<&Path>),
         }
         .map(|_| vec![])
         .map_err(|e| e.to_string())

@@ -49,6 +49,8 @@ fn main() {
         OutputFormat::Binary => db
             .export_bin(&mut outf, ExportBinMode::ExpNative)
             .expect("Output error"),
-        OutputFormat::Ascii => db.export_ascii(&mut outf).expect("Output error"),
+        OutputFormat::Ascii => db
+            .export_ascii(&mut outf, Some(&args.dbfn))
+            .expect("Output error"),
     };
 }
