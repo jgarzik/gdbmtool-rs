@@ -4,8 +4,8 @@ mod display;
 
 use clap::{arg, command, value_parser};
 use display::display;
-use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
 use std::io::{BufRead, IsTerminal};
 use std::path::PathBuf;
 use std::process::ExitCode;
