@@ -306,3 +306,176 @@ fn gdbmdump_errors() {
     assert_eq!(output.status.code(), Some(1));
     assert!(!stderr(&output).contains("panicked"));
 }
+
+// value of the "name value" line for name in lines
+fn field<'a>(lines: &'a [String], name: &str) -> &'a str {
+    lines
+        .iter()
+        .find_map(|l| l.strip_prefix(name)?.strip_prefix(' '))
+        .unwrap_or_else(|| panic!("no {name} in {lines:?}"))
+}
+
+#[test]
+fn info() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    let output = run(GDBMTOOL, &["-r", db.to_str().unwrap(), "info"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let lines: Vec<String> = stdout(&output).lines().map(String::from).collect();
+    assert_eq!(field(&lines, "file"), db.to_str().unwrap());
+    assert_eq!(field(&lines, "writable"), "no");
+    assert_eq!(field(&lines, "magic"), "GDBM_NUMSYNC_MAGIC64");
+    assert_eq!(field(&lines, "layout"), "Off64Align8");
+    assert_eq!(field(&lines, "endian"), "Little");
+    assert_eq!(field(&lines, "bucket-count"), "1");
+    assert_eq!(field(&tool(&db, &["info"]), "writable"), "yes");
+}
+
+#[test]
+fn verify() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    let lines = tool(&db, &["verify"]);
+    assert_eq!(field(&lines, "buckets"), "1");
+    assert_eq!(field(&lines, "records"), "2");
+}
+
+#[test]
+fn export_and_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    for format in ["host", "long32", "long64le", "long64be"] {
+        let dump = dir.path().join(format!("{format}.dump"));
+        tool(&db, &["export", "--format", format, dump.to_str().unwrap()]);
+
+        // the format is detected on import
+        let copy = dir.path().join(format!("{format}.db"));
+        let output = run(
+            GDBMTOOL,
+            &[
+                "-c",
+                copy.to_str().unwrap(),
+                "import",
+                dump.to_str().unwrap(),
+            ],
+        );
+        assert!(output.status.success(), "{}", stderr(&output));
+        assert_eq!(stdout(&output), "2 records imported\n");
+        assert_eq!(
+            sorted(tool(&copy, &["entries"])),
+            ["alpha => one", "beta => two"]
+        );
+        tool(
+            &copy,
+            &["import", "--format", format, dump.to_str().unwrap()],
+        );
+    }
+}
+
+#[test]
+fn import_modes() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+    let ascii = dir.path().join("ascii.dump");
+    let binary = dir.path().join("binary.dump");
+    tool(&db, &["dump", ascii.to_str().unwrap()]);
+    tool(&db, &["export", binary.to_str().unwrap()]);
+    tool(&db, &["insert", "alpha", "changed"]);
+
+    // with --insert, existing keys are an error
+    for (command, dump) in [("load", &ascii), ("import", &binary)] {
+        let output = run(
+            GDBMTOOL,
+            &[
+                db.to_str().unwrap(),
+                command,
+                "--insert",
+                dump.to_str().unwrap(),
+            ],
+        );
+        assert!(!output.status.success(), "{command}");
+        assert!(
+            stderr(&output).contains("already exists"),
+            "{}",
+            stderr(&output)
+        );
+    }
+    assert_eq!(tool(&db, &["get", "alpha"]), ["changed"]);
+
+    // by default they are replaced
+    assert_eq!(
+        tool(&db, &["load", ascii.to_str().unwrap()]),
+        ["2 records loaded"]
+    );
+    assert_eq!(tool(&db, &["get", "alpha"]), ["one"]);
+}
+
+#[test]
+fn numsync_conversion() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    tool(&db, &["downgrade"]);
+    let info = tool(&db, &["info"]);
+    assert_eq!(field(&info, "magic"), "GDBM_MAGIC64");
+    assert_eq!(field(&info, "numsync"), "none");
+
+    tool(&db, &["upgrade"]);
+    let info = tool(&db, &["info"]);
+    assert_eq!(field(&info, "magic"), "GDBM_NUMSYNC_MAGIC64");
+    assert_ne!(field(&info, "numsync"), "none");
+    assert_eq!(tool(&db, &["len"]), ["2"]);
+}
+
+#[test]
+fn reorganize_and_sync() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    let output = run_stdin(
+        &[db.to_str().unwrap()],
+        "insert gamma three\nremove beta\nreorganize\nsync\nlen\n",
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(stdout(&output), "two\n2\n");
+    assert_eq!(field(&tool(&db, &["verify"]), "records"), "2");
+    assert_eq!(
+        sorted(tool(&db, &["entries"])),
+        ["alpha => one", "gamma => three"]
+    );
+}
+
+#[test]
+fn recover() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    let lines = tool(&db, &["recover"]);
+    assert_eq!(field(&lines, "recovered-keys"), "2");
+    assert_eq!(field(&lines, "failed-keys"), "0");
+    assert!(!lines.iter().any(|l| l.starts_with("backup ")));
+
+    let lines = tool(&db, &["recover", "--backup"]);
+    let backup = Path::new(field(&lines, "backup")).to_path_buf();
+    assert!(backup.exists());
+    assert_eq!(
+        sorted(tool(&backup, &["entries"])),
+        ["alpha => one", "beta => two"]
+    );
+    assert_eq!(tool(&db, &["len"]), ["2"]);
+}
+
+#[test]
+fn maintenance_needs_write_access() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    for command in ["recover", "reorganize", "upgrade", "downgrade"] {
+        let output = run(GDBMTOOL, &["-r", db.to_str().unwrap(), command]);
+        assert!(!output.status.success(), "{command}");
+        assert!(stderr(&output).contains("read-only"), "{command}");
+    }
+}

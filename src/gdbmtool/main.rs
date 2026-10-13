@@ -1,3 +1,5 @@
+#[path = "../binformat.rs"]
+mod binformat;
 mod context;
 mod database;
 mod display;

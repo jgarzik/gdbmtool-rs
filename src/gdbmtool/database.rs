@@ -1,6 +1,8 @@
+use crate::binformat::BinFormat;
+use clap::builder::EnumValueParser;
 use clap::{arg, value_parser};
 use gdbm_native::{Gdbm, ImportMode, OpenOptions};
-use std::io::BufRead;
+use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 pub struct Database(Gdbm);
@@ -61,18 +63,32 @@ impl Database {
             clap::Command::new("entries").about("List database entries"),
             clap::Command::new("load")
                 .about("Import entries from an ASCII dump file")
-                .arg(
-                    arg!(<FILE> "Filename of dump file")
-                        .required(true)
-                        .value_parser(value_parser!(PathBuf)),
-                ),
+                .arg(file_arg())
+                .arg(insert_arg()),
             clap::Command::new("dump")
                 .about("Export database entries to an ASCII dump file")
-                .arg(
-                    arg!(<FILE> "Filename of dump file")
-                        .required(true)
-                        .value_parser(value_parser!(PathBuf)),
-                ),
+                .arg(file_arg()),
+            clap::Command::new("import")
+                .about("Import entries from a binary dump file")
+                .arg(file_arg())
+                .arg(format_arg().help("Length field layout of the dump [default: detected]"))
+                .arg(insert_arg()),
+            clap::Command::new("export")
+                .about("Export database entries to a binary dump file")
+                .arg(file_arg())
+                .arg(format_arg().help("Length field layout of the dump [default: host]")),
+            clap::Command::new("info").about("Show the database's format and size"),
+            clap::Command::new("verify")
+                .about("Check the consistency of the database's use of file space"),
+            clap::Command::new("recover")
+                .about("Rebuild the database from the records that can still be read")
+                .arg(arg!(--backup "First copy the database file to FILE.bak")),
+            clap::Command::new("reorganize")
+                .about("Compact the database, rebuilding it without free space"),
+            clap::Command::new("sync").about("Write changes to disk"),
+            clap::Command::new("upgrade").about("Convert the database to numsync format"),
+            clap::Command::new("downgrade")
+                .about("Convert the database to the format without numsync"),
         ]
     }
 
@@ -83,6 +99,14 @@ impl Database {
     ) -> Result<Vec<String>, String> {
         let sarg = |name| matches.get_one::<String>(name);
         let parg = |name| matches.get_one::<PathBuf>(name);
+        let format = || matches.get_one::<BinFormat>("format").copied();
+        let mode = || {
+            if matches.get_flag("insert") {
+                ImportMode::Insert
+            } else {
+                ImportMode::Replace
+            }
+        };
         match name {
             "header" => Ok(self.header()),
             "dir" => Ok(self.directory()),
@@ -94,8 +118,17 @@ impl Database {
             "keys" => self.keys(),
             "values" => self.values(),
             "entries" => self.entries(),
-            "load" => self.load(parg("FILE").unwrap()),
+            "load" => self.load(parg("FILE").unwrap(), mode()),
             "dump" => self.dump(parg("FILE").unwrap()),
+            "import" => self.import(parg("FILE").unwrap(), format(), mode()),
+            "export" => self.export(parg("FILE").unwrap(), format()),
+            "info" => Ok(self.info()),
+            "verify" => self.verify(),
+            "recover" => self.recover(matches.get_flag("backup")),
+            "reorganize" => self.reorganize(),
+            "sync" => self.sync(),
+            "upgrade" => self.set_numsync(true),
+            "downgrade" => self.set_numsync(false),
             _ => unreachable!("no such command"),
         }
     }
@@ -164,15 +197,15 @@ impl Database {
             .map_err(|e| e.to_string())
     }
 
-    fn load(&mut self, filename: &Path) -> Result<Vec<String>, String> {
+    fn load(&mut self, filename: &Path, mode: ImportMode) -> Result<Vec<String>, String> {
         std::fs::File::open(filename)
             .map_err(|e| e.to_string())
-            .and_then(|mut f| {
+            .and_then(|f| {
                 self.0
-                    .import_ascii(&mut f, ImportMode::Replace)
+                    .import_ascii(&mut std::io::BufReader::new(f), mode)
                     .map_err(|e| e.to_string())
             })
-            .map(|_| vec![])
+            .map(|info| vec![format!("{} records loaded", info.count)])
     }
 
     fn dump(&self, filename: &Path) -> Result<Vec<String>, String> {
@@ -188,6 +221,128 @@ impl Database {
             .map(|_| vec![])
             .map_err(|e| e.to_string())
     }
+
+    fn import(
+        &mut self,
+        filename: &Path,
+        format: Option<BinFormat>,
+        mode: ImportMode,
+    ) -> Result<Vec<String>, String> {
+        std::fs::File::open(filename)
+            .map_err(|e| e.to_string())
+            .and_then(|f| {
+                self.0
+                    .import_bin(
+                        &mut std::io::BufReader::new(f),
+                        format.map(Into::into),
+                        mode,
+                    )
+                    .map_err(|e| e.to_string())
+            })
+            .map(|count| vec![format!("{count} records imported")])
+    }
+
+    fn export(&self, filename: &Path, format: Option<BinFormat>) -> Result<Vec<String>, String> {
+        let file = std::fs::File::create(filename).map_err(|e| e.to_string())?;
+        let mut out = std::io::BufWriter::new(file);
+
+        self.0
+            .export_bin(&mut out, format.unwrap_or(BinFormat::Host).into())
+            .map_err(|e| e.to_string())?;
+        out.flush().map(|_| vec![]).map_err(|e| e.to_string())
+    }
+
+    fn info(&self) -> Vec<String> {
+        let db = &self.0;
+        let path = db
+            .path()
+            .map_or("(temporary)".into(), |p| p.display().to_string());
+        let yes_no = |b: bool| if b { "yes" } else { "no" };
+        vec![
+            format!("file {path}"),
+            format!("writable {}", yes_no(db.is_writable())),
+            format!("magic {}", db.magic()),
+            format!("layout {:?}", db.layout()),
+            format!("endian {:?}", db.endian()),
+            format!("block-size {}", db.block_size()),
+            format!("bucket-size {}", db.bucket_size()),
+            format!("dir-depth {}", db.dir_depth()),
+            format!("bucket-count {}", db.bucket_count()),
+            format!(
+                "numsync {}",
+                db.numsync().map_or("none".into(), |n| n.to_string())
+            ),
+            format!(
+                "char-sign {}",
+                db.char_sign()
+                    .map_or("undetermined".into(), |c| format!("{c:?}"))
+            ),
+        ]
+    }
+
+    fn verify(&self) -> Result<Vec<String>, String> {
+        self.0
+            .verify()
+            .map(|report| {
+                vec![
+                    format!("buckets {}", report.buckets),
+                    format!("records {}", report.records),
+                    format!("free-extents {}", report.free_extents),
+                    format!("free-bytes {}", report.free_bytes),
+                ]
+            })
+            .map_err(|e| e.to_string())
+    }
+
+    fn recover(&mut self, backup: bool) -> Result<Vec<String>, String> {
+        self.0
+            .recover(backup)
+            .map(|report| {
+                let mut lines = vec![
+                    format!("recovered-keys {}", report.recovered_keys),
+                    format!("failed-keys {}", report.failed_keys),
+                    format!("duplicate-keys {}", report.duplicate_keys),
+                    format!("failed-buckets {}", report.failed_buckets),
+                ];
+                lines.extend(
+                    report
+                        .backup
+                        .map(|path| format!("backup {}", path.display())),
+                );
+                lines
+            })
+            .map_err(|e| e.to_string())
+    }
+
+    fn reorganize(&mut self) -> Result<Vec<String>, String> {
+        self.0.compact().map(|_| vec![]).map_err(|e| e.to_string())
+    }
+
+    fn sync(&mut self) -> Result<Vec<String>, String> {
+        self.0.sync().map(|_| vec![]).map_err(|e| e.to_string())
+    }
+
+    fn set_numsync(&mut self, numsync: bool) -> Result<Vec<String>, String> {
+        self.0
+            .set_numsync(numsync)
+            .and_then(|_| self.0.sync())
+            .map(|_| vec![])
+            .map_err(|e| e.to_string())
+    }
+}
+
+fn file_arg() -> clap::Arg {
+    arg!(<FILE> "Filename of dump file")
+        .required(true)
+        .value_parser(value_parser!(PathBuf))
+}
+
+fn format_arg() -> clap::Arg {
+    arg!(--format <FORMAT>).value_parser(EnumValueParser::<BinFormat>::new())
+}
+
+fn insert_arg() -> clap::Arg {
+    arg!(--insert "Fail if a key in the dump is already in the database, instead of replacing it")
 }
 
 /// Bytes as a line of text: UTF-8 is shown as is, except that backslash, control characters and
