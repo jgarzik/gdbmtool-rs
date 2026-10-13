@@ -65,12 +65,8 @@ impl Context {
         name: &str,
         matches: &clap::ArgMatches,
     ) -> Result<Vec<String>, String> {
-        match name {
-            "set" => unimplemented!(),
-            _ => self
-                .current_database()
-                .and_then(|db| db.dispatch(name, matches)),
-        }
+        self.current_database()
+            .and_then(|db| db.dispatch(name, matches))
     }
 
     fn current_database(&mut self) -> Result<&mut Database, String> {

@@ -1,6 +1,3 @@
-extern crate clap;
-extern crate gdbm_native;
-
 use clap::{Parser, ValueEnum};
 use gdbm_native::{BinDumpFormat, OpenOptions};
 

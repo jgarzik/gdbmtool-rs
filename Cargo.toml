@@ -11,7 +11,7 @@ description = "Command line tools for GDBM databases, using gdbm-native crate"
 
 [dependencies]
 clap = { version = "4", features = ["derive", "cargo"] }
-gdbm-native = { version = "0", git = "https://github.com/jgarzik/gdbm-native-rs.git", features = ["diagnostic"]}
+gdbm-native = { version = "0.9", features = ["diagnostic"] }
 rustyline = "13"
 shellwords = "1.1"
 termsize = "0.1.9"

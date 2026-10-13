@@ -1,8 +1,3 @@
-extern crate clap;
-extern crate gdbm_native;
-extern crate rustyline;
-extern crate shellwords;
-
 mod context;
 mod database;
 mod display;
