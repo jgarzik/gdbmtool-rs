@@ -225,3 +225,26 @@ fn gdbmdump_ascii_and_binary() {
             .starts_with(b"!\r\n! GDBM FLAT FILE DUMP")
     );
 }
+
+#[test]
+fn binary_data_is_escaped() {
+    let dir = tempfile::tempdir().unwrap();
+    let dump = dir.path().join("binary.dump");
+    // key "k\xff", value "line1\nline2\\"
+    std::fs::write(
+        &dump,
+        "# GDBM dump file\n#:version=1.1\n# End of header\n\
+         #:len=2\na/8=\n#:len=12\nbGluZTEKbGluZTJc\n#:count=1\n# End of data\n",
+    )
+    .unwrap();
+
+    let db = dir.path().join("test.db");
+    let output = run(
+        GDBMTOOL,
+        &["-c", db.to_str().unwrap(), "load", dump.to_str().unwrap()],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert_eq!(tool(&db, &["keys"]), ["k\\xff"]);
+    assert_eq!(tool(&db, &["values"]), ["line1\\nline2\\\\"]);
+    assert_eq!(tool(&db, &["entries"]), ["k\\xff => line1\\nline2\\\\"]);
+}

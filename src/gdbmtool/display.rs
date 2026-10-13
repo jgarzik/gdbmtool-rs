@@ -1,14 +1,18 @@
-use std::io::Write;
+use std::io::{IsTerminal, Write};
 use std::process::Stdio;
 
 pub fn display(lines: Vec<String>) {
-    let terminal_height = termsize::get().expect("we are in a terminal").rows;
+    // page output that does not fit on the terminal
+    let terminal_height = std::io::stdout()
+        .is_terminal()
+        .then(termsize::get)
+        .flatten()
+        .map(|size| size.rows as usize);
 
-    if lines.len() > terminal_height as usize {
-        pager(lines);
-    } else {
-        write_lines(&mut std::io::stdout(), lines);
-    };
+    match terminal_height {
+        Some(height) if lines.len() > height => pager(lines),
+        _ => write_lines(&mut std::io::stdout(), lines),
+    }
 }
 
 fn write_lines(out: &mut impl Write, lines: Vec<String>) {

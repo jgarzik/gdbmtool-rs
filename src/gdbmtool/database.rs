@@ -117,19 +117,13 @@ impl Database {
     }
 
     fn get(&self, key: &str) -> Result<Vec<String>, String> {
-        self.0
-            .get::<str, String>(key)
-            .map(|value| value.into_iter().collect())
-            .map_err(|e| e.to_string())
+        Self::old_value(self.0.get(key))
     }
 
-    // previous value, if any, as text
+    // value, if any, as text
     fn old_value(old: gdbm_native::Result<Option<Vec<u8>>>) -> Result<Vec<String>, String> {
-        old.map_err(|e| e.to_string()).and_then(|old| {
-            old.map(|v| String::from_utf8(v).map_err(|e| e.to_string()))
-                .transpose()
-                .map(|value| value.into_iter().collect())
-        })
+        old.map(|value| value.as_deref().map(text).into_iter().collect())
+            .map_err(|e| e.to_string())
     }
 
     fn insert(&mut self, key: &str, value: &str) -> Result<Vec<String>, String> {
@@ -146,22 +140,26 @@ impl Database {
 
     fn keys(&self) -> Result<Vec<String>, String> {
         self.0
-            .keys()
+            .keys::<Vec<u8>>()
+            .map(|key| key.map(|key| text(&key)))
             .collect::<Result<_, _>>()
             .map_err(|e| e.to_string())
     }
 
     fn values(&self) -> Result<Vec<String>, String> {
         self.0
-            .values()
+            .values::<Vec<u8>>()
+            .map(|value| value.map(|value| text(&value)))
             .collect::<Result<_, _>>()
             .map_err(|e| e.to_string())
     }
 
     fn entries(&self) -> Result<Vec<String>, String> {
         self.0
-            .iter::<String, String>()
-            .map(|element| element.map(|(key, value)| format!("{key} => {value}")))
+            .iter::<Vec<u8>, Vec<u8>>()
+            .map(|element| {
+                element.map(|(key, value)| format!("{} => {}", text(&key), text(&value)))
+            })
             .collect::<Result<_, _>>()
             .map_err(|e| e.to_string())
     }
@@ -186,8 +184,51 @@ impl Database {
             .map_err(|e| e.to_string())?;
 
         self.0
-            .export_ascii(&mut file, None::<&Path>)
+            .export_ascii(&mut file, self.0.path())
             .map(|_| vec![])
             .map_err(|e| e.to_string())
+    }
+}
+
+/// Bytes as a line of text: UTF-8 is shown as is, except that backslash, control characters and
+/// bytes that are not UTF-8 are escaped (`\\`, `\n`, `\t`, `\xNN`), so binary keys and values
+/// display unambiguously on one line.
+pub fn text(bytes: &[u8]) -> String {
+    let mut out = String::with_capacity(bytes.len());
+    for chunk in bytes.utf8_chunks() {
+        for c in chunk.valid().chars() {
+            match c {
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\t' => out.push_str("\\t"),
+                c if c.is_control() => {
+                    // control characters are all single bytes or U+0080..U+009F
+                    let mut buf = [0; 4];
+                    for b in c.encode_utf8(&mut buf).bytes() {
+                        out.push_str(&format!("\\x{b:02x}"));
+                    }
+                }
+                c => out.push(c),
+            }
+        }
+        for b in chunk.invalid() {
+            out.push_str(&format!("\\x{b:02x}"));
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::text;
+
+    #[test]
+    fn text_escapes() {
+        assert_eq!(text(b"plain"), "plain");
+        assert_eq!(text("caf\u{e9}".as_bytes()), "caf\u{e9}");
+        assert_eq!(text(b"a\\b"), "a\\\\b");
+        assert_eq!(text(b"a\nb\tc\0"), "a\\nb\\tc\\x00");
+        assert_eq!(text(b"\xff\xfe ok"), "\\xff\\xfe ok");
+        assert_eq!(text("\u{85}".as_bytes()), "\\xc2\\x85");
     }
 }
