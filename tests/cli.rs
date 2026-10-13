@@ -479,3 +479,73 @@ fn maintenance_needs_write_access() {
         assert!(stderr(&output).contains("read-only"), "{command}");
     }
 }
+
+// C GDBM's gdbm_load and gdbm_dump, if installed; required if REQUIRE_GDBM is set (as in CI)
+fn c_gdbm_tools() -> bool {
+    let found = Command::new("gdbm_load")
+        .arg("--version")
+        .output()
+        .is_ok_and(|output| output.status.success());
+    assert!(
+        found || std::env::var_os("REQUIRE_GDBM").is_none(),
+        "REQUIRE_GDBM is set but C GDBM's gdbm_load was not found"
+    );
+    found
+}
+
+fn c_tool(bin: &str, args: &[&str]) {
+    let output = run(bin, args);
+    assert!(
+        output.status.success(),
+        "{bin} {args:?}: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn c_gdbm_interop() {
+    if !c_gdbm_tools() {
+        eprintln!("skipping: C GDBM tools not installed");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+    let path = |name: &str| dir.path().join(name).to_str().unwrap().to_string();
+    let expected = ["alpha => one", "beta => two"];
+
+    // our dumps load into C GDBM databases, which we read directly
+    tool(&db, &["dump", &path("ours.ascii")]);
+    tool(&db, &["export", &path("ours.bin")]);
+    c_tool("gdbm_load", &[&path("ours.ascii"), &path("c-ascii.db")]);
+    c_tool("gdbm_load", &[&path("ours.bin"), &path("c-bin.db")]);
+    for c_db in ["c-ascii.db", "c-bin.db"] {
+        assert_eq!(sorted(tool(Path::new(&path(c_db)), &["entries"])), expected);
+        assert_eq!(
+            field(&tool(Path::new(&path(c_db)), &["verify"]), "records"),
+            "2"
+        );
+    }
+
+    // C GDBM's dumps load into our databases
+    c_tool("gdbm_dump", &[&path("c-ascii.db"), &path("c.ascii")]);
+    c_tool(
+        "gdbm_dump",
+        &["--format=binary", &path("c-ascii.db"), &path("c.bin")],
+    );
+    let output = run(
+        GDBMTOOL,
+        &["-c", &path("from-ascii.db"), "load", &path("c.ascii")],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let output = run(
+        GDBMTOOL,
+        &["-c", &path("from-bin.db"), "import", &path("c.bin")],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    for our_db in ["from-ascii.db", "from-bin.db"] {
+        assert_eq!(
+            sorted(tool(Path::new(&path(our_db)), &["entries"])),
+            expected
+        );
+    }
+}
