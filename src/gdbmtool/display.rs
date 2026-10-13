@@ -7,7 +7,9 @@ pub fn display(lines: Vec<String>) {
         .is_terminal()
         .then(termsize::get)
         .flatten()
-        .map(|size| size.rows as usize);
+        .map(|size| size.rows as usize)
+        // some terminals report no size
+        .filter(|&rows| rows > 0);
 
     match terminal_height {
         Some(height) if lines.len() > height => pager(lines),
