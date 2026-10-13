@@ -45,18 +45,20 @@ impl Database {
             clap::Command::new("dir").about("Display database directory"),
             clap::Command::new("len").about("Show the number of entries in the database"),
             clap::Command::new("get")
-                .about("Retrieve and display value for specified KEY")
+                .about("Show the value for KEY")
                 .arg(arg!(<KEY> "Key to look up").required(true)),
             clap::Command::new("insert")
-                .about("Insert VALUE for specified KEY, showing the old value if there was one")
+                .about("Insert or replace VALUE for KEY, showing the old value if there was one")
                 .arg(arg!(<KEY> "Key to insert").required(true))
                 .arg(arg!(<VALUE> "Value to set").required(true)),
             clap::Command::new("try-insert")
-                .about("Try inserting VALUE for specified KEY, failing if the key is already used")
+                .about(
+                    "Insert VALUE for KEY only if KEY is not present, otherwise showing its value",
+                )
                 .arg(arg!(<KEY> "Key to insert").required(true))
                 .arg(arg!(<VALUE> "Value to set").required(true)),
             clap::Command::new("remove")
-                .about("Remove VALUE for specified KEY, showing the old value if there was one")
+                .about("Remove KEY, showing its value if it was present")
                 .arg(arg!(<KEY> "Key to look up").required(true)),
             clap::Command::new("keys").about("List database keys"),
             clap::Command::new("values").about("List database values"),

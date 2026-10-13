@@ -26,7 +26,10 @@ fn main() -> ExitCode {
             arg!(-b --"block-size" <SIZE> "Block size for new databases")
                 .value_parser(value_parser!(u32)),
         )
-        .arg(arg!(--"cache-size" <SIZE> "Size of memory cache").value_parser(value_parser!(usize)))
+        .arg(
+            arg!(--"cache-size" <SIZE> "Size in bytes of the bucket cache")
+                .value_parser(value_parser!(usize)),
+        )
         .arg(
             arg!(<FILE> "Database filename")
                 .required(false)
