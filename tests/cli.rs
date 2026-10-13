@@ -248,3 +248,61 @@ fn binary_data_is_escaped() {
     assert_eq!(tool(&db, &["values"]), ["line1\\nline2\\\\"]);
     assert_eq!(tool(&db, &["entries"]), ["k\\xff => line1\\nline2\\\\"]);
 }
+
+#[test]
+fn gdbmdump_binary_formats() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    // records are key and value lengths then data, so the dump size grows with the length field
+    let size = |format: &str| {
+        let output = run(
+            GDBMDUMP,
+            &["--bin-format", format, db.to_str().unwrap(), "-"],
+        );
+        assert!(output.status.success(), "{}", stderr(&output));
+        output.stdout.len()
+    };
+    let long32 = size("long32");
+    assert_eq!(size("long64le"), long32 + 4 * 4);
+    assert_eq!(size("long64be"), long32 + 4 * 4);
+}
+
+#[test]
+fn gdbmdump_to_stdout() {
+    let dir = tempfile::tempdir().unwrap();
+    let db = new_db(dir.path());
+
+    let output = run(GDBMDUMP, &["-f", "ascii", db.to_str().unwrap(), "-"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(text.starts_with("# GDBM dump file"));
+    assert!(text.contains(&format!("#:file={}\n", db.display())));
+    assert!(text.ends_with("#:count=2\n# End of data\n"));
+}
+
+#[test]
+fn gdbmdump_errors() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = dir.path().join("missing.db");
+    let out = dir.path().join("out.dump");
+
+    let output = run(
+        GDBMDUMP,
+        &[missing.to_str().unwrap(), out.to_str().unwrap()],
+    );
+    assert_eq!(output.status.code(), Some(1));
+    assert!(
+        stderr(&output).starts_with("gdbmdump-rs: "),
+        "{}",
+        stderr(&output)
+    );
+    assert!(!stderr(&output).contains("panicked"));
+    assert!(!out.exists());
+
+    let db = new_db(dir.path());
+    let bad_out = dir.path().join("no/such/dir/out.dump");
+    let output = run(GDBMDUMP, &[db.to_str().unwrap(), bad_out.to_str().unwrap()]);
+    assert_eq!(output.status.code(), Some(1));
+    assert!(!stderr(&output).contains("panicked"));
+}
