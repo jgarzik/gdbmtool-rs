@@ -9,7 +9,7 @@ use std::process::ExitCode;
 
 /// Export a GDBM database to a binary or ASCII dump file
 #[derive(Parser, Debug)]
-#[command(author, version)]
+#[command(name = "gdbmdump-rs", author, version)]
 struct Args {
     /// Pathname of GDBM database to open
     dbfn: PathBuf,
