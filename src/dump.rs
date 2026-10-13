@@ -4,9 +4,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-#[derive(Parser, Debug)]
 /// Export a GDBM database to a binary or ASCII dump file
-#[command(author, version, about, long_about = None)]
+#[derive(Parser, Debug)]
+#[command(author, version)]
 struct Args {
     /// Pathname of GDBM database to open
     dbfn: PathBuf,
