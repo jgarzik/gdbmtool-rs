@@ -186,6 +186,7 @@ dependencies = [
  "gdbm-native",
  "rustyline",
  "shellwords",
+ "tempfile",
  "termsize",
 ]
 

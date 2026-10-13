@@ -27,3 +27,6 @@ path = "src/gdbmtool/main.rs"
 name = "gdbmdump-rs"
 path = "src/dump.rs"
 
+
+[dev-dependencies]
+tempfile = "3.27"
