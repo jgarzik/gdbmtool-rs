@@ -1,18 +1,21 @@
 [package]
 name = "gdbmtool-rs"
-version = "0.1.0"
+version = "0.9.0"
 authors = ["Jeff Garzik"]
-edition = "2021"
+edition = "2024"
+rust-version = "1.89"
 license = "MIT"
 readme = "README.md"
-description = "Command line tools for GDBM databases, using gdbm-native crate"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Command line tools for GDBM databases, built on the pure-Rust gdbm-native crate"
+repository = "https://github.com/jgarzik/gdbmtool-rs"
+keywords = ["gdbm", "dbm", "database", "key-value", "cli"]
+categories = ["command-line-utilities", "database"]
+include = ["/src/**/*.rs", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 
 [dependencies]
-clap = { version = "4", features = ["derive", "cargo"] }
-gdbm-native = { version = "0", git = "https://github.com/jgarzik/gdbm-native-rs.git", features = ["diagnostic"]}
-rustyline = "13"
+clap = { version = "4.6", features = ["derive", "cargo"] }
+gdbm-native = { version = "0.9", features = ["diagnostic"] }
+rustyline = "18"
 shellwords = "1.1"
 termsize = "0.1.9"
 
@@ -24,3 +27,6 @@ path = "src/gdbmtool/main.rs"
 name = "gdbmdump-rs"
 path = "src/dump.rs"
 
+
+[dev-dependencies]
+tempfile = "3.27"

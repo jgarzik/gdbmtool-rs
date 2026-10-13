@@ -1,0 +1,13 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # refs are toolchain names (stable, master), not versions
+      - dependency-name: dtolnay/rust-toolchain
