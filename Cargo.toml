@@ -15,7 +15,7 @@ include = ["/src/**/*.rs", "/README.md", "/LICENSE", "/CHANGELOG.md"]
 [dependencies]
 clap = { version = "4.6", features = ["derive", "cargo"] }
 gdbm-native = { version = "0.9", features = ["diagnostic"] }
-rustyline = "18"
+rustyline = "19"
 shellwords = "1.1"
 termsize = "0.1.9"
 
